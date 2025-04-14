@@ -1,0 +1,13 @@
+*.aux
+*.fdb_latexmk
+*.log
+*.synctex(busy)
+*.bcf
+*.fls
+*.run.xml
+*.synctex.gz
+*.bbl
+*.blg
+*.asv
+*.bbl-SAVE-ERROR
+*.bcf-SAVE-ERROR

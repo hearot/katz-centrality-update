@@ -1,0 +1,637 @@
+\documentclass[a4paper]{article}
+
+\usepackage[italian]{babel}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{bookmark}
+\usepackage{biblatex}
+\usepackage{csquotes}
+\usepackage{nicefrac}
+\usepackage{leftindex}
+\usepackage{float}
+\usepackage{adjustbox}
+\usepackage{multirow}
+
+%% Since I want "Input" and "Output" in the algorithm, I will need
+\usepackage{algorithm}
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+\makeatletter
+\renewcommand{\ALG@name}{Algoritmo}
+\makeatother
+
+% Since I will write algorithm in two columns, I will need
+\usepackage{multicol}
+
+\newcommand{\dist}{{\rm dist}}
+\newcommand{\NN}{\mathbb{N}}
+\newcommand{\NNp}{\mathbb{N}_{> 0}}
+\newcommand{\RR}{\mathbb{R}}
+\DeclareMathOperator*{\argmin}{\arg\!\min}
+\DeclareMathOperator*{\argmax}{\arg\!max}
+\newcommand{\evec}{{\bf e}}
+\newcommand{\cvec}{{\bf c}}
+\newcommand{\avec}{{\bf a}}
+\newcommand{\qvec}{{\bf q}}
+\newcommand{\vvec}{{\bf v}}
+\newcommand{\xvec}{{\bf x}}
+\newcommand{\bone}{\mathbf{1}}
+\newcommand{\bzero}{{\bf 0}}
+\newcommand{\inv}{^{-1}}
+\newcommand{\cS}{\mathcal{S}}
+\newcommand{\cE}{\mathcal{E}}
+\newcommand{\cEout}{\cE^\text{out}}
+\newcommand{\cEin}{\cE^\text{in}}
+\newcommand{\cN}{\mathcal{N}}
+\newcommand{\cF}{\mathcal{F}}
+
+\newcommand{\se}{\text{se }}
+\newcommand{\altrimenti}{\text{altrimenti}}
+
+\newtheorem{theorem}{Teorema}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definizione}
+\newtheorem{remark}{Osservazione}
+\newtheorem{proposition}{Proposizione}
+\newtheorem{corollary}{Corollario}
+
+\usepackage{chngcntr}
+\counterwithout{table}{section} 
+\renewcommand{\thetable}{\arabic{table}}
+
+\addbibresource{biblio.bib}
+
+\title{Implementazione di due algoritmi per l'aggiornamento efficiente dell'indice di centralità di Katz}
+\author{Gabriel Antonio Videtta (\textsc{654839})}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+	In questo progetto implementiamo e sperimentiamo la teoria e gli algoritmi
+	proposti da \cite{katz2024} per aggiornare in modo accurato l'indice di
+	centralità di Katz di un grafo non orientato semplice a cui vengono rimossi degli archi o dei nodi.
+\end{abstract}
+
+\section{Trattazione della teoria}
+
+Ricordiamo brevemente che un grafo (senza archi ripetuti) è una coppia di insiemi $G = (V, E)$ con
+$E \subseteq V \times V$ e $V = \{1, \ldots, n\}$ per qualche $n \in \NNp$. Gli elementi dell'insieme $V$ sono detti \textit{nodi}, mentre quelli dell'insieme $E$ sono detti \textit{archi}.
+
+Un grafo è detto \textit{non
+	orientato} se la relazione $E$ è simmetrica, ovverosia se vale $(i, j) \in E \iff (j, i) \in E$, mentre è detto \textit{orientato} se non lo è. Un grafo è detto \textit{semplice} se è non orientato, non ha archi ripetuti e non ammette lacci, ovverosia se $(i, i) \notin E$ per ogni $i$. D'ora in
+avanti ci riferiremo ai grafi semplici come grafi, se non diversamente
+specificato.
+
+Nel caso di un
+grafo non orientato, si può studiare il grafo $G$ anche come una coppia
+$(V, E)$ dove gli elementi di $E$ sono insiemi di due elementi, invece che
+coppie, dove $\{i, j\}$ fa le veci di ciò che precedentemente erano
+$(i, j)$ e $(j, i)$. Per questo motivo ci riferiremo a un arco che collega
+$i$ e $j$ come $\{i, j\}$ e scriveremo $i \sim j$ per indicare che $\{i, j\}$ è un arco del grafo $G$. Se $i \sim j$, i nodi $i$ e $j$ sono
+detti \textit{adiacenti}.
+
+Un grafo è rappresentato operativamente tramite la propria \textit{matrice
+	di adiacenza} $A \in \RR^{n \times n}$, definita componente per componente come
+\[
+	A_{ij} = \begin{cases}
+	1 & \se i \sim j, \\
+	0 & \altrimenti.
+	\end{cases}
+\]
+
+Dalla simmetria di $E$ discende immediatamente anche quella di $A$, e quindi
+$A^T = A$.
+
+Un \textit{cammino di lunghezza $r$ dal nodo $i$ al nodo $j$} è una sequenza
+ordinata di $r+1$ nodi $i_0 = i$, $i_1$, ..., $i_r = j$ dove $i_k$ e $i_{k+1}$ sono adiacenti per ogni $k = 0$, $1$, ..., $r-1$. Un cammino
+è detto \textit{elementare}\footnote{In italiano è spesso ignorata la differenza tra cammino e cammino elementare e ci si riferisce molto spesso a entrambi semplicemente come cammino. In inglese la differenza è fortunatamente più sottile: al primo ci si riferisce come \textit{walk}, e al secondo come \textit{path}.} se ogni nodo è toccato al più una volta.
+
+Un grafo è detto \textit{connesso} se dati due nodi esiste sempre un cammino che li collega. D'ora in avanti considereremo soltanto grafi connessi.
+
+\begin{remark}
+	Assumere di star lavorando su grafi connessi non indebolisce i risultati
+	di \cite{katz2024}, dal momento che è sempre possibile partizionare
+	un grafo nelle sue componenti connesse e dunque permutare la matrice
+	di adiacenza $A$ in una matrice diagonale a blocchi, dove ogni blocco
+	è la matrice di adiacenza di una singola componente connessa.
+\end{remark}
+
+\subsection{Definizioni preliminari e notazione}
+
+Una nozione intermedia tra cammino e cammino elementare è necessaria per
+la trattazione che faremo della teoria in questo progetto:
+
+\begin{definition} \label{def:fpw} Sia $G$ un grafo connesso e sia
+	$r \in \NNp$. Si dice {\rm first-passage walk (FPW) di lunghezza $r$ da $i$ a $j$} un cammino $i_0 = i$, $i_1$, ..., $i_{r-1}$, $i_r = j$ dove
+	$i_k \neq j$ per ogni $k = 0$, ..., $r-1$. Definiamo FPW anche il cammino di lunghezza $0$ in cui compare solo $j$. Equivalentemente un FPW è un
+	cammino da $i$ a $j$ nel quale $j$ è incontrato una singola volta,
+	ovverosia alla fine.
+\end{definition}
+
+Prima di definire una nozione di distanza tra i nodi del grafo $G$, ricordiamo un classico risultato della teoria dei grafi, facilmente
+dimostrabile tramite induzione.
+
+\begin{lemma}
+	\label{lemma:numero_cammini}
+	Sia $A$ la matrice di adiacenza di $G$ e sia $r \in \NN$. Allora l'entrata $(i,j)$-esima di $A^r$ rappresenta il numero di cammini
+	di lunghezza $r$ da $i$ a $j$.
+\end{lemma}
+
+\begin{remark}
+	Dal momento che stiamo lavorando su grafi connessi, se $i$ e $j$ sono
+	due nodi distinti, grazie al Lemma~\ref{lemma:numero_cammini}, deve
+	esistere $r \in \NNp$ tale per cui l'entrata $(i,j)$-esima di $A^r$
+	è non nulla.
+	
+\end{remark}
+
+\begin{definition} \label{def:distanza} Siano $i$ e $j$
+	due nodi. Allora si definisce la {\rm distanza (geodesica) tra $i$ e $j$} come
+	\begin{equation}
+		\dist(i, j) = \argmin_{r \in \NN} \{(A^r)_{ij} > 0\}.
+	\end{equation}
+	
+	Equivalentemente, $\dist(i, j)$ è la lunghezza del cammino più corto
+	da $i$ a $j$, per il Lemma~\ref{lemma:numero_cammini}.
+\end{definition}
+
+Nel corso di questo progetto, in analogia a \cite{katz2024}, scriveremo
+$\bone \in \RR^n$ per riferirci al vettore composto da soli uno, $\bzero \in \RR^n$ per riferirci al vettore nullo, $I \in \RR^{n \times n}$ per riferirci
+alla matrice identità e $\evec_k \in \RR^n$ per riferirci alla $k$-esima colonna $I$. Scriveremo $\avec_k$ per riferirci alla $k$-esima colonna di una matrice $A$ e $a_k$ per riferirci al $k$-esimo elemento di un vettore $\avec$.
+
+\subsection{L'indice di centralità di Katz e modellazione del problema}
+
+\begin{remark}
+	\label{remark:molt_per_1}
+	Dal Lemma~\ref{lemma:numero_cammini} segue facilmente che l'$i$-esima
+	coordinata del vettore $A^r \bone$ rappresenta il numero di cammini
+	di lunghezza $r$ che partono da $i$ e che terminano in un qualsiasi nodo.
+\end{remark}
+
+\begin{definition} Sia $\alpha \in (0, \nicefrac{1}{\rho(A)})$\footnote{Il limite superiore $\nicefrac{1}{\rho(A)}$ è necessario affinché la serie converga a $(I-\alpha A)\inv$.}, {\rm l'indice di centralità di Katz in $\alpha$ di $A$} è il vettore
+	\[
+		\xvec := (I + \alpha A + \alpha^2A^2+\cdots) \bone = (I-\alpha A)\inv \bone.
+	\]
+	
+	Equivalentemente, $\xvec$ è l'unica soluzione del sistema lineare $(I-\alpha A)\xvec = \bone$.
+\end{definition}
+    
+L'obiettivo di \cite{katz2024} è quello di sviluppare degli algoritmi efficienti per aggiornare il vettore di Katz $\xvec$ senza dover nuovamente
+risolvere il sistema lineare $(I-\alpha A)\xvec = \bone$. Per fare ciò
+si sono considerati due casi: quello in cui viene rimosso un arco e quello
+in cui viene rimosso un nodo. Nel primo caso, per rimuovere l'arco $(i, j)$
+si procede annullando le entrate $A_{ij}$ e $A_{ji}$ nella matrice di
+adiacenza di $G$. Nel secondo caso, invece di rimuovere il nodo $i$, lo
+si ``scollega'' da ogni altro nodo, mantenendo così la taglia della matrice
+di adiacenza $A$ invariata; operativamente si annullano dunque tutte le
+entrate $A_{it}$ e $A_{ti}$ al variare di $t$ tra i nodi.
+
+\begin{remark} \label{remark:ops}
+	Le due operazioni di modellazione ora discusse corrispondono a due modifiche di rango $2$:
+	\[
+		A - [\evec_i, \evec_j] [\evec_j, \evec_i]^T  \quad \text{e} \quad A - [\evec_i, \avec_i] [\avec_i, \evec_i]^T.
+	\]
+\end{remark}
+
+Se $\cS \neq \emptyset$ è un insieme di vertici o di archi, indichiamo
+con $\cvec^\cS_r \in \RR^n$ il vettore la cui $i$-esima componente
+rappresenta il numero di cammini di lunghezza $r$ passanti per almeno
+un elemento di $\cS$. Il seguente risultato segue facilmente dal Lemma~\ref{lemma:numero_cammini} e
+dall'Osservazione~\ref{remark:molt_per_1}.
+
+\begin{lemma}
+	Sia $A_\cS$ la matrice di
+	adiacenza ottenuta eliminando dal grafo gli elementi di $\cS$, allora
+	\begin{equation} \label{eq:scrittura_csr}
+		\cvec^\cS_r = (A^r - A_\cS^r)\bone.
+	\end{equation}
+\end{lemma}
+
+Uno dei principali obiettivi di \cite{katz2024} è quello di trovare
+una scrittura alternativa a \eqref{eq:scrittura_csr} per ricavare
+$A_\cS^r$ e aggiornare così l'indice di Katz. Infatti, se $\xvec^\cS$ è
+l'indice di Katz ottenuto rimuovendo gli elementi di $\cS$, allora\footnote{Dal momento che $0 \leq A_\cS \leq A$, $\rho (A_\cS) \leq \rho(A)$ \cite{horn1985} e quindi la convergenza di $\sum_{r=0}^\infty \alpha^r A^r$ implica
+	quella di $\sum_{r=0}^\infty \alpha^r A_\cS^r$. Pertanto le scritture di \eqref{eq:scrittura_del_cambio_di_centralità} sono ben definite.}
+
+\begin{equation} \label{eq:scrittura_del_cambio_di_centralità}
+	\xvec - \xvec^\cS = (I + \alpha (A - A_\cS) + \alpha^2(A^2 - A_\cS^2)+ \cdots) \bone = \sum_{r=0}^\infty \alpha^r \cvec^\cS_r.
+\end{equation}
+
+\subsection{Riscritture di \texorpdfstring{$\cvec^\cS_r$}{cˢᵣ} togliendo degli archi}
+
+L'osservazione chiave fatta in \cite{katz2024} riguarda la decomposizione di
+un cammino passante per $\cS = \{e\}$ con $e \in E$ in tre parti: una parte
+iniziale in cui $e$ non è ancora stato visitato; la visita di $e$; e infine
+un cammino senza vincoli su tutto il grafo. Da questa osservazione
+segue la prossima proposizione.
+
+\begin{proposition}
+	Siano $e = \{u, v\} \in E$, $\cE = \{e\}$ e $r > 0$. Allora
+	\begin{equation} \label{eq:riscrittura_cvecrce}
+		\cvec_r^\cE = \left( \sum_{k = 0}^{r-1} (A_\cE)^k (\evec_u\evec_v^T+\evec_v\evec_u^T)A^{r-k-1} \right) \bone.
+	\end{equation}
+\end{proposition}
+
+Una dimostrazione della proposizione si trova in \cite[Proposition 1]{katz2024} e si basa sull'osservazione appena fatta.
+
+\begin{remark} \label{remark:riscrittura_crei}
+	Dal momento che $0 \leq \evec_i^T (A_\cE)^k e_u \leq \evec_i^T A^k e_u$,
+	se $\evec_i^T A^k e_u = 0$ allora $\evec_i^T (A_\cE)^k e_u = 0$.
+	Il termine $\evec_i^T A^k e_u$ coincide con $(A^k)_{iu}$, che,
+	per la Definizione \ref{def:distanza}, è necessariamente nullo
+	quando $k < \ell_u := \dist(i, u)$. Analogamente $\evec_i^T A^k e_v$
+	è nullo quando $k < \ell_v := \dist(i, v)$.
+	
+	Combinando le tre osservazioni, $\evec_i^T (A_\cE)^k e_u$ si annulla
+	con $k < \ell_u$ e $\evec_i^T (A_\cE)^k e_v$ si annulla con $k < \ell_v$.
+\end{remark}
+
+Sfruttando l'Osservazione \ref{remark:riscrittura_crei} ed espandendo i termini, l'equazione \eqref{eq:riscrittura_cvecrce} si scrive termine
+a termine come
+\begin{equation}
+	(\cvec_r^\cE)_i = \evec_i^T \left( \sum_{k = \ell_u}^{r-1} (A_\cE)^k\evec_u\evec_v^TA^{r-k-1} + \sum_{k = \ell_v}^{r-1} (A_\cE)^k\evec_v\evec_u^TA^{r-k-1} \right) \bone.
+\end{equation}
+
+Se invece $\cE$ è un insieme di più archi, posto che $\cE \ni e = \{u_e, v_e\}$, allora l'equazione \eqref{eq:riscrittura_cvecrce} si generalizza
+all'equazione
+\begin{equation} \label{eq:riscrittura_più_archi}
+	\cvec_r^\cE = \sum_{e \in \cE} \left( \sum_{k = 0}^{r-1} (A_\cE)^k (\evec_{u_e}\evec_{v_e}^T+\evec_{v_e}\evec_{u_e}^T)A^{r-k-1} \right) \bone,
+\end{equation}
+dove si ricorda che $A_\cE$ rappresenta la matrice di adiacenza ottenuta
+eliminando dal grafo $G$ gli archi di $\cE$.
+
+Tramite la definizione di $A_\cE$ e un cambio dell'ordine delle sommatorie si può a sua volta riscrivere l'eq. \eqref{eq:riscrittura_più_archi} come
+
+\begin{equation} \label{eq:finale_più_archi}
+	\cvec_r^\cE = \sum_{k=0}^{r-1} (A_\cE)^k A^{r-k} \bone - \sum_{k=0}^{r-1} (A_\cE)^{k+1} A^{r-k-1} \bone.
+\end{equation}
+
+\subsection{Riscritture di \texorpdfstring{$\cvec^\cS_r$}{cˢᵣ} togliendo dei nodi}
+
+Abbiamo modellato l'eliminazione di un nodo $w$ come una modifica della matrice di
+adiacenza in cui annulliamo ogni entrata relativa a $w$. Possiamo dunque
+utilizzare l'equazione \eqref{eq:riscrittura_più_archi} con $\cE = \{ \{w, u\} \in E\}$ e $A_\cN = A_\cE$ per ricavare
+\begin{eqnarray}
+	\cvec_r^{\{w\}} = \cvec_r^\cE 
+	&=& \sum_{k=0}^{r-1} \left( (A_\cE)^k (\evec_w \avec_w^T + \avec_w \evec_w^T) A^{r-k-1} \right) \bone \nonumber \\
+	&=& \left(\evec_w^TA^{r}\bone\right) \evec_w+ \sum_{k=0}^{r-1} (\evec_w^TA^{r-k-1}\bone) (A_{\cN})^kA\evec_w. \label{eq:crw}
+\end{eqnarray}
+dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A^{r-k-1} \bone$ è uno scalare e che
+\[(A_\cN)^k \evec_w = \begin{cases}
+	\evec_w & \se k = 0, \\
+	0 & \se k > 0.
+	\end{cases} \]
+	
+	Il vettore $(A_{\cN})^kA\evec_w$ conta\footnote{
+		Infatti il numero di FPWs di lunghezza $k$ con sorgente $i$ è dato da $\sum_{j \in V} \evec_i^T (A_\cN)^{k-1} \evec_j \evec_j^T A \evec_w = \evec_i^T (A_\cN)^{k-1} \left(\sum_{j \in V} \evec_j \evec_j^T\right) A \evec_w = \evec_i^T (A_\cN)^{k-1} A \evec_w$.
+	} il numero di first-passage walks (FPWs) da un
+	qualsiasi nodo verso $w$, e saperlo calcolare efficientemente ci permetterà di
+	sviluppare un algoritmo per determinare $\cvec_r^{\{w\}}$, e di conseguenza il
+	nuovo indice di centralità di Katz.
+	
+	Indichiamo con $\qvec_k \in \RR^n$ il vettore contenente alla $i$-esima
+	coordinata il numero di FPWs con origine il nodo $i$ e destinazione $w$. Per quanto appena
+	osservato vale che
+	\[
+		(\qvec_k)_i = \begin{cases}
+		0 & \se 0 \leq k < \dist(i, w), \\
+		\evec_i^T (A_\cN)^{k-1} A \evec_w & \altrimenti,
+		\end{cases} \qquad (i \neq w).
+	\]
+	Se invece $i = w$, per $k=0$ il termine $(\qvec_k)_w$ vale $1$, mentre vale $0$ per $k>0$ (vd. Definizione \ref{def:fpw}). Sostituendo $\qvec_k$ in \eqref{eq:crw},
+	si ottiene immediatamente il seguente risultato.
+	
+	\begin{proposition} \label{prop:crw_qk}
+		Sia $\cvec_r^{\{w\}}$ il vettore le cui entrate contano il numero
+		di cammini di lunghezza $r$ terminanti in un qualsiasi nodo
+		dopo aver visitato $w$ almeno una volta. Allora
+		\begin{equation}
+			\cvec_r^{\{w\}} = \sum_{k=0}^r (\evec_w^T A^{r-k} \bone) \qvec_k.
+		\end{equation}
+	\end{proposition}
+	
+	In linea con quanto detto prima, e soprattutto alla luce della Proposizione \ref{prop:crw_qk}, per rendere più efficiente l'aggiornamento dell'indice
+	di Katz è sufficiente dunque trovare una riscrittura di $\qvec_k$.
+	
+	Tuttavia non esiste un analogo di \eqref{eq:riscrittura_più_archi} per
+	l'eliminazione di più nodi (cfr. \cite[p.~8]{katz2024}), e si rende
+	necessaria l'introduzione di una generalizzazione del concetto di
+	FPW per ovviare al problema.
+	
+	\begin{definition} \label{def:favoiding_fpw}
+		Sia $G = (V, E)$ un grafo. Siano $w \in V$, $\cF \subseteq V \setminus \{w\}$, $i \in V$ e $r \in \NN$. Un $\cF$-avoiding first-passage walk da
+		$i$ a $w$ di lunghezza $r$ è un FPW
+		\[
+			i_0 = i, i_1, \ldots, i_{r-1},  i_r = w
+		\]
+		tale per cui $i_k \notin \cF$ per ogni $k = 0$, ..., $r-1$. Si include
+		tra i $\cF$-avoiding FPW anche il cammino di lunghezza $0$ diretto
+		verso $w$.
+	\end{definition}
+	
+	Per $\cF = \emptyset$, un  $\cF$-avoiding FPW coincide con un normale FPW.
+	
+	Indichiamo con $\qvec_k^\cF \in \RR^n$ il vettore contenente alla $i$-esima
+	coordinata il numero di $\cF$-avoiding FPWs con origine il nodo $i$ e
+	destinazione $w$. Analogamente a com'è descritto $\qvec_k$, vale che
+	\[
+		(\qvec_k^\cF)_i = \begin{cases}
+		0 & \se 0 \leq k < \dist(i, w), \\
+		\evec_i^T (A_{\cF \cup \{w\}})^{k-1} A_\cF \evec_w & \altrimenti,
+		\end{cases} \qquad (i \neq w).
+	\]
+	Se invece $i = w$, per $k=0$ il termine $(\qvec_k^\cF)_w$ vale $1$, mentre vale $0$ per $k>0$ (vd. Definizione \ref{def:favoiding_fpw}). Osserviamo che per $\cF = \emptyset$, $\qvec_k^\cF$ si riduce in effetti a $\qvec_k$.
+	
+	Utilizzando gli $\cF$-avoiding FPWs si generalizza anche la Proposizione \ref{prop:crw_qk}.
+	
+	\begin{proposition} \label{prop:qkfi}
+		Sia $\cvec_r^\cN$ il vettore le cui entrate contano il numero di
+		cammini di lunghezza $r$ terminanti in un qualsiasi nodo dopo aver
+		visitato almeno un nodo di $\cN$. Allora
+		\[
+			(\cvec_r^\cN)_i = \begin{cases}
+			\sum_{w \in \cN} \sum_{k=1}^r \left[\qvec_k^{\cF_w}(w) \right]_i \left[A^{r-k} \bone\right]_w & \se i \notin \cN, \\
+			(A^r \bone)_i & \altrimenti,
+			\end{cases}
+		\]
+		dove $\cF_w = \cN \setminus \{ w \}$ e $\qvec_k^{\cF_w}(w)$ è
+		il vettore contenente alla $i$-esima coordinata il numero di
+		$\cF_w$-avoiding FPWs di lunghezza $k$ con sorgente $i$ e destinazione
+		$w$.
+	\end{proposition}
+	
+	Una dimostrazione di questa proposizione si trova in \cite[Proposition 4]{katz2024} e sfrutta dei risultati preliminari, ottenuti partizionando
+	additivamente $A$ in tre matrici: $A^{in}$, relativa al grafo in cui gli
+	archi collegano solo elementi di $\cN$, $A^{out}$, relativa al grafo in cui
+	gli elementi di $\cN$ si collegano solo a elementi non appartenenti a $\cN$,
+	e $A_{\cN}$.
+	
+	Un modo di calcolare efficientemente $\qvec_{k+1}^\cF$ ricorsivamente
+	con $\qvec_k^\cF$ è dato dalla seguente proposizione.
+	
+	\begin{proposition} \label{prop:qveccf}
+		Sia $\cN = \cF \cup \{w\}$, dove $w \in V$ and $\cF \subseteq V \setminus \{w\}$. Allora vale che
+		\[
+			\qvec_{k+1}^\cF = A \qvec_k^\cF - \sum_{j \in \cN} (\evec_j^T A \qvec_k^\cF) \evec_j, \quad \textit{per ogni }\,k = 0, 1, 2, \ldots.
+		\]
+	\end{proposition}
+	
+	La dimostrazione della Proposizione \ref{prop:qveccf} si basa sulla
+	riscrittura di $\qvec_{k+1}^\cF$ come $A_\cN \qvec_k^\cF$ e di
+	$A_\cN$ come $A - \sum_{j \in \cN} [\evec_j, \avec_j][\avec_j, \evec_j]^T$ (cfr. Osservazione \ref{remark:ops}, \cite[Proposition 5]{katz2024}).
+	
+	\subsection{Algoritmi per l'aggiornamento dell'indice di Katz}
+	
+	Grazie alla riscrittura della variazione dell'indice di Katz
+	data dell'eq. \eqref{eq:scrittura_del_cambio_di_centralità}, possiamo
+	adesso ricavare efficientemente nei vari casi il nuovo indice di Katz.
+	
+	Nel caso in cui si tolga degli archi, mettendo insieme l'eq. \eqref{eq:scrittura_del_cambio_di_centralità} e l'eq. \eqref{eq:finale_più_archi}, si ottiene il seguente risultato.
+	
+	\begin{corollary}
+		L'indice di Katz dopo la rimozione di un insieme
+		di archi $\cE$ è
+		\begin{equation}
+			\xvec^\cE = \xvec - \sum_{\{u,v\}\in \cE} \left[
+				\left(\sum_{k=0}^{\infty} \alpha^{k+1}(A_\cE)^k \evec_v \right) x_u 
+			+ \left(\sum_{k=0}^{\infty} \alpha^{k+1} (A_\cE)^k \evec_u \right) x_v \right].
+		\end{equation}
+		Nel caso di un solo arco $e = \{u, v\}$, la formula si
+		riduce a
+		\begin{equation} \label{eq:rimozione_arco_finale}
+			\xvec^{\{e\}} = \xvec -
+			x_u \sum_{k=0}^{\infty} \alpha^{k+1}(A_\cE)^k \evec_v 
+			- x_v \sum_{k=0}^{\infty} \alpha^{k+1} (A_\cE)^k \evec_u.
+		\end{equation}
+	\end{corollary}
+	
+	Per costruire l'Algoritmo \ref{alg:arco}, che aggiorna l'indice di Katz dopo la rimozione
+	di un arco, si è imposto innanzitutto per le due serie nell'eq. \eqref{eq:rimozione_arco_finale} un limite superiore $L \in \NN$. Questo limite è scelto dinamicamente dall'algoritmo
+	in modo tale che sia al più un limite statico $L_{max}^\cE \in \NN$ e che sia il minimo per cui la norma della differenza tra la serie per $L+1$
+	e quella per $L$ sia minore di una tolleranza $\texttt{tol}$.
+	
+	Questo corrisponde a controllare che valga
+	\[
+		\alpha^{L+1}\left( x_u
+		\frac{\|A_\cE^L \evec_v\|_2}{\|\xvec\|_2} +
+		x_v \frac{\|A_\cE^L \evec_u\|_2}{\|\xvec\|_2}
+		\right) < \texttt{tol}.
+	\]
+	
+	Finché questa condizione non vale e si è sotto il numero massimo di iterazioni, si reitera ogni somma dell'eq. \eqref{eq:rimozione_arco_finale}.
+	
+	\begin{algorithm}[H]
+		\caption{Aggiornamento dell'indice di Katz dopo la rimozione di un arco}
+		\label{alg:arco}
+		\begin{algorithmic}[1]
+			\REQUIRE $A\in \RR^{n
+				\times n}$ matrice di adiacenza, $\xvec\in \RR^{n}$ vettore di Katz, $\alpha \in (0, \nicefrac{1}{\rho(A)})$, $L_{\max}^{\cE} \in \NN$, $\texttt{tol}\in \RR$ tolleranza, $e=\{u,v\}$ arco da rimuovere.
+			\ENSURE $\widehat{\xvec}^{(e)}\in \RR^{n}$ aggiornamento approssimato, $L\in \NN$ numero di iterazioni finale. 
+			%\vspace{-0.2cm}
+			\STATE $\widehat{\xvec}^{\{e\}}=\xvec  - \alpha*x_v*\evec_u - \alpha*x_u*\evec_v$;
+			\STATE $L=1$; 
+			%\STATE $A = A -\mathbf{e}_u{\mathbf{e}_v}^T- \mathbf{e}_v{\mathbf{e}_u}^T$ {\color{red} move after line 4}
+			\STATE $\mathbf{s} = \alpha^2*(A*\evec_u -\evec_v)$;
+			\STATE $\mathbf{t} = \alpha^2*(A*\evec_v - \evec_u)$;
+			\STATE $\widehat{\xvec}^{\{e\}}= \widehat{\xvec}^{\{e\}} - x_v*\mathbf{s} - x_u *\mathbf{t}$;
+			\WHILE {$\|x_v*\mathbf{s} + x_u *\mathbf{t}\|\,/\,\|\xvec\|_2  >  \texttt{tol}$ \AND  $L< L_{\max}^{\cE}$}
+			\STATE $\mathbf{s} = \alpha *(A*\mathbf{s} - s_u *\evec_v - s_v *\evec_u)$; \label{line:matrix_vector_product_u_alg_2}
+			\STATE $\mathbf{t} = \alpha *(A*\mathbf{t} - t_u *\evec_v - t_v *\evec_u)$; \label{line:matrix_vector_product_v_alg_2}
+			\STATE $\widehat{\xvec}^{\{e\}}= \widehat{\xvec}^{\{e\}} - x_v*\mathbf{s} - x_u *\mathbf{t}$; 
+			\STATE $L= L+1$;
+			\ENDWHILE
+		\end{algorithmic}
+	\end{algorithm}
+	
+	Per rimuovere un nodo il percorso è del tutto analogo. Mettendo insieme
+	l'eq. \eqref{eq:scrittura_del_cambio_di_centralità} e la Proposizione \ref{prop:qkfi}, si ottiene il seguente corollario.
+	
+	\begin{corollary}
+		L'indice di Katz dopo la rimozione di un insieme di nodi $\cN \subseteq V$ in $G$ è tale per cui
+		\begin{equation}
+			x_i - x_i^{\cN} = 
+			\begin{cases}
+				\sum_{w\in \cN}\,
+				\left( x_w  \sum_{r=\ell_w}^{\infty} \alpha^r
+				(\qvec_r^{\cF_w})_{i}\right) & \;\; \se i\not\in\cN, \\
+				x_i-1                        & \;\; \altrimenti.     
+			\end{cases}
+		\end{equation}
+		Nel caso di un singolo nodo $w$, l'indice di Katz diventa
+		esattamente
+		\begin{equation} \label{eq:rimozione_nodo_finale}
+			x_i^{\{w\}} = x_i - x_w \sum_{r=1}^\infty \alpha^r (\qvec_r)_i.
+		\end{equation}
+	\end{corollary}
+	
+	Ancora una volta, per costruire l'Algoritmo \ref{alg:nodo}, si è troncato
+	le serie a un limite $L \in \NN$, scelto nello stesso modo proposto
+	per l'Algoritmo \ref{alg:arco}. Questa volta la condizione da soddisfare
+	è però
+	\[
+		\alpha^L x_w \frac{\|\qvec_L\|_2}{\|\xvec\|_2} < \texttt{tol}.
+	\]
+	
+	\begin{algorithm}[H]
+		\caption{Aggiornamento dell'indice di Katz dopo la rimozione di un nodo}
+		\label{alg:nodo}
+		\begin{algorithmic}[1]
+			\REQUIRE $A\in \RR^{n\times n}$ matrice di adiacenza, $\xvec\in \RR^{n}$ vettore di Katz, $\alpha \in (0,\nicefrac{1}{\rho(A)})$, $L_{\max}^{\cN} \in \NN$, $\texttt{tol}\in \RR$ tolleranza, $w$ nodo da rimuovere. 
+			\ENSURE $\widehat{\xvec}^{\{w\}} \in \RR^{n}$ aggiornamento approssimato, $L\in \NN$ numero di iterazioni finale. 
+			%\vspace{-0.2cm}
+			\STATE {$\widehat{\xvec}^{\{w\}}=\xvec$;}
+			\STATE $L = 1$;
+			%\STATE $\avec_w = A(:,w)$;
+			%\STATE $\mathbf{v} = \avec_w$;
+			\STATE $\qvec = \alpha* A*\evec_w$;
+			\STATE $\widehat{\xvec}^{\{w\}} = \widehat{\xvec}^{\{w\}} - x_w *\qvec$;
+			\WHILE {$x_w\|\qvec\|_{2}\,/\,\|\xvec\|_2  >  \texttt{tol}$ \AND  $L< L_{\max}^{\cN}$}
+			\STATE $\qvec = \alpha*A*\qvec$; \label{line:compute_fpw}\label{line:mat_prod_node}
+			\STATE $q_w = 0$;
+			\STATE $\widehat{\xvec}^{\{w\}} = \widehat{\xvec}^{\{w\}} - x_w *\qvec$;\label{line:compute_x_w_hat} 
+			\STATE $L=L+1$;
+			\ENDWHILE
+			\STATE $(\widehat{\xvec}^{\{w\}})_w = 1$
+		\end{algorithmic}
+	\end{algorithm}
+	
+	Ricordando che il costo computazionale di un prodotto matrice-vettore $Av$ con $v \in \RR^n$ è $\mathcal{O}(m)$, dove $m$ è il numero di archi di $G$,
+	si ricava facilmente che l'Algoritmo \ref{alg:arco} e l'Algoritmo \ref{alg:nodo} hanno entrambi complessità computazionale $\mathcal{O}(Lm)$ (cfr. \cite[Proposition 8]{katz2024}).
+	
+	\section{Implementazione e sperimentazione in MATLAB}
+	
+	Presso \cite{hearotCode} si sono implementati in \texttt{katz\_edge.m} e \texttt{katz\_node.m}, rispettivamente, gli Algoritmi
+	\ref{alg:arco} e \ref{alg:nodo}. La sperimentazione è stata portata a termine tramite MATLAB R2024b su un PC fisso equipaggiato di 32 GB di RAM e di
+	una CPU Intel i7-10700K con un clock rate di 3.80 GHz.
+	
+	\subsection{Illustrazione degli esperimenti}
+	
+	La sperimentazione segue quella di \cite[Section 7]{katz2024}, e procede considerando il grafo dei collegamenti stradali dello
+	stato del Minnesota (\texttt{minnesota}), disponibile su \cite{minnesota} e a cui ci si riferirà d'ora in poi con $A$. Nella Tabella \ref{tab:info_minnesota} sono riassunte
+	le informazioni di base del grafo in questione. Si osserva subito che \texttt{minnesota} è un grafo \textit{sparso}.
+	
+	\begin{table}[H]
+		\centering
+		\caption{Informazioni di base sul grafo \texttt{minnesota}: i numeri di nodi $n$, il numero di archi $m$, il raggio spettrale $\rho(A)$ e il numero di componenti fortemente connesse.}
+		\label{tab:info_minnesota}
+		
+		\vskip 0.1in
+		    
+		\begin{tabular}{|l|c|c|c|c|c|}       
+			\hline
+			Grafo              & $n$  & $m$  & $\rho(A)$ & comp.~fort.~connesse \\
+			\hline
+			\texttt{minnesota} & $2640$ & $3302$ & $\approx 3.232397$  & $2$                    \\
+			\hline
+		\end{tabular}    
+	\end{table}
+	
+	La sperimentazione si è divisa in due fasi e in entrambe si è utilizzato $\alpha = \nicefrac{0.85}{\rho(A)}$.
+	
+	Nella prima fase si è considerato l'arco $e = \{1011, 1015\}$ e si è costruita la
+	matrice di adiacenza $A_\cE$ del grafo ottenuto eliminando l'arco $e$. Si è dunque calcolato il nuovo vettore di Katz
+	usando i tre seguenti metodi:
+	
+	\begin{enumerate}
+		\item[(i)] Algoritmo \ref{alg:arco} con $L_{\max}^{\cE} = 30$ e $\texttt{tol} = 10^{-4}$.
+		\item[(ii)] \texttt{pcg} ($\hat\xvec^{(0)} = 0$): si è risolto direttamente $(I - \alpha A_\cE) \hat\xvec = \bone$ utilizzando
+		      la funzione built-in di MATLAB \texttt{pcg} (metodo del gradiente coniugato) senza precondizionamento, con vettore iniziale
+		      $\xvec^{(0)} = 0$ e con una tolleranza relativa di $10^{-5}$.
+		\item[(iii)] \texttt{pcg} ($\hat\xvec^{(0)} = \xvec$): si è risolto direttamente $(I - \alpha A_\cE) \hat\xvec = \bone$ utilizzando
+		      la funzione built-in di MATLAB \texttt{pcg} (metodo del gradiente coniugato) senza precondizionamento, con vettore iniziale
+		      $\hat\xvec^{(0)} = \xvec$ (il precedente vettore di Katz) e con una tolleranza relativa di $10^{-5}$.
+	\end{enumerate}
+	
+	L'errore relativo tra l'indice di Katz approssimato col metodo (i) e l'indice di Katz calcolato col metodo (iii) è risultato essere
+	\[
+		\frac{\|\hat\xvec - \xvec^\cE\|}{\|\xvec^\cE\|} \approx 1.56 \cdot 10^{-4}.
+	\]
+	
+	Nella Tabella \ref{tab:esperimento_1} sono riportati i dati riguardanti il primo esperimento.
+	
+	\begin{table}[H]
+		\centering
+		\caption{Numero di iterazioni e tempi di esecuzione per approssimare $\mathbf{\hat x}$ con i metodi (i)-(iii) dopo la rimozione dell'arco $e = \{1011, 1015\}$. I valori rappresentano la media calcolata su $30$ esecuzioni delle rispettive funzioni.}
+		\label{tab:esperimento_1}
+		
+		\vskip 0.1in
+		
+		\begin{tabular}{|l|cc|cc|cc|}
+			\hline
+			\multirow{2}*{Grafo} & \multicolumn{2}{|c|}{Algoritmo \ref{alg:arco}} & \multicolumn{2}{|c|}{\texttt{pcg} ($\hat\xvec^{(0)} = \bzero$)} & \multicolumn{2}{|c|}{\texttt{pcg} ($\hat\xvec^{(0)} = \xvec$)} \\
+			                   & $L$          & tempo (s)            & iter          & tempo (s)            & iter          & tempo (s)            \\
+			\hline
+			\texttt{minnesota} & $\mathbf{7}$ & $\approx 5.93 \cdot 10^{-4}$ & $\mathbf{20}$ & $\approx 4.71 \cdot 10^{-4}$ & $\mathbf{10}$ & $\approx 2.87 \cdot 10^{-4}$ \\
+			\hline
+		\end{tabular}
+	\end{table}
+	
+	Nella seconda fase si è considerato analogamente il nodo $w = 1011$, poi rimosso. Si è costruita la matrice di adiacenza
+	$A_\cN$ e si è poi calcolato il nuovo vettore di Katz usando i tre seguenti metodi:
+	
+	\begin{enumerate}
+		\item[(i)] Algoritmo \ref{alg:nodo} con $L_{\max}^{\cE} = 30$ e $\texttt{tol} = 10^{-4}$.
+		\item[(ii)] \texttt{pcg} ($\hat\xvec^{(0)} = 0$): si è risolto direttamente $(I - \alpha A_\cN) \hat\xvec = \bone$ utilizzando
+		      la funzione built-in di MATLAB \texttt{pcg} (metodo del gradiente coniugato) senza precondizionamento, con vettore iniziale
+		      $\xvec^{(0)} = 0$ e con una tolleranza relativa di $10^{-5}$.
+		\item[(iii)] \texttt{pcg} ($\hat\xvec^{(0)} = \xvec$): si è risolto direttamente $(I - \alpha A_\cN) \hat\xvec = \bone$ utilizzando
+		      la funzione built-in di MATLAB \texttt{pcg} (metodo del gradiente coniugato) senza precondizionamento, con vettore iniziale
+		      $\hat\xvec^{(0)} = \xvec$ (il precedente vettore di Katz) e con una tolleranza relativa di $10^{-5}$.
+	\end{enumerate}
+	
+	L'errore relativo tra l'indice di Katz approssimato col metodo (i) e l'indice di Katz calcolato col metodo (iii) è risultato essere
+	\[
+		\frac{\|\hat\xvec - \xvec^\cN\|}{\|\xvec^\cN\|} \approx 1.62 \cdot 10^{-4}.
+	\]
+	
+	Nella Tabella \ref{tab:esperimento_2} sono riportati i dati riguardanti il secondo esperimento.
+	
+	\begin{table}[H]
+		\centering
+		\caption{Numero di iterazioni e tempi di esecuzione per approssimare $\mathbf{\hat x}$ con i metodi (i)-(iii) dopo la rimozione del nodo $w = 1011$. I valori rappresentano la media calcolata su $30$ esecuzioni delle rispettive funzioni.}
+		\label{tab:esperimento_2}
+		
+		\vskip 0.1in
+		
+		\begin{tabular}{|l|cc|cc|cc|}
+			\hline
+			\multirow{2}*{Grafo} & \multicolumn{2}{|c|}{Algoritmo \ref{alg:nodo}} & \multicolumn{2}{|c|}{\texttt{pcg} ($\hat\xvec^{(0)} = \bzero$)} & \multicolumn{2}{|c|}{\texttt{pcg} ($\hat\xvec^{(0)} = \xvec$)} \\
+			                   & $L$          & tempo (s)            & iter          & tempo (s)            & iter          & tempo (s)            \\
+			\hline
+			\texttt{minnesota} & $\mathbf{9}$ & $\approx 3.48 \cdot 10^{-4}$ & $\mathbf{20}$ & $\approx 4.97 \cdot 10^{-4}$ & $\mathbf{10}$ & $\approx 3.07 \cdot 10^{-4}$ \\
+			\hline
+		\end{tabular}
+	\end{table}
+	
+	\subsection{Analisi dei risultati}
+	
+	I risultati sono sostanzialmente coerenti con le conclusioni di \cite{katz2024}. Il numero di iterazioni $L$ della Tabella \ref{tab:esperimento_1} è inferiore
+	ai numeri delle iterazioni eseguite con \texttt{pcg}. Analogamente succede la stessa cosa con la Tabella \ref{tab:esperimento_2}.
+	Anche gli errori relativi indicano che gli Algoritmi \ref{alg:arco} e \ref{alg:nodo} forniscono delle buone approssimazioni.
+	
+	A prima vista, i tempi risultano però incoerenti. Nella Tabella \ref{tab:esperimento_1}, l'Algoritmo \ref{alg:arco} è più lento
+	di entrambe le esecuzioni di \texttt{pcg}. Analogamente nella Tabella \ref{tab:esperimento_2}, l'Algoritmo \ref{alg:nodo} risulta
+	pressoché veloce quanto \texttt{pcg} con vettore iniziale $\hat\xvec^{(0)} = \xvec$.
+	
+	Si può spiegare questa incoerenza in tre modi:
+	
+	\begin{itemize}
+		\item[(i)] L'implementazione di \texttt{katz\_edge.m} e di \texttt{katz\_node.m} è fatta in MATLAB, mentre
+		      \texttt{pcg} è una funzione built-in di MATLAB, risultando dunque sicuramente più ottimizzata.
+		      
+		\item[(ii)] La matrice di adiacenza di \texttt{minnesota} è molto sparsa nonché non eccessivamente grande (cfr. Tabella \ref{tab:info_minnesota}),
+		      e \texttt{pcg} è già fortemente ottimizzato per le matrici sparse.
+		      
+		\item[(iii)] Togliere un singolo arco o un singolo nodo potrebbe non far variare molto il ranking dato dal vettore
+		      di Katz, e questo velocizza molto le esecuzioni di \texttt{pcg} con vettore iniziale il vettore di Katz precedente. Un migliore esperimento potrebbe essere togliere sequenzialmente più archi o più nodi e comparare i risultati
+		      finali approssimati con quelli ottenuti tramite \texttt{pcg}.
+	\end{itemize}
+	
+	\printbibliography
+	
+\end{document}
