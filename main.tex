@@ -153,7 +153,7 @@ dimostrabile tramite induzione.
 \begin{definition} \label{def:distanza} Siano $i$ e $j$
 	due nodi. Allora si definisce la {\rm distanza (geodesica) tra $i$ e $j$} come
 	\begin{equation}
-		\dist(i, j) = \argmin_{r \in \NN} \{(A^r)_{ij} > 0\}.
+		\dist(i, j) = \min \{r \in \NN \mid (A^r)_{ij} > 0\}.
 	\end{equation}
 	
 	Equivalentemente, $\dist(i, j)$ è la lunghezza del cammino più corto
@@ -162,7 +162,7 @@ dimostrabile tramite induzione.
 
 Nel corso di questo progetto, in analogia a \cite{katz2024}, scriveremo
 $\bone \in \RR^n$ per riferirci al vettore composto da soli uno, $\bzero \in \RR^n$ per riferirci al vettore nullo, $I \in \RR^{n \times n}$ per riferirci
-alla matrice identità e $\evec_k \in \RR^n$ per riferirci alla $k$-esima colonna $I$. Scriveremo $\avec_k$ per riferirci alla $k$-esima colonna di una matrice $A$ e $a_k$ per riferirci al $k$-esimo elemento di un vettore $\avec$.
+alla matrice identità e $\evec_k \in \RR^n$ per riferirci alla $k$-esima colonna di $I$, il $k$-esimo elemento della base canonica di $\RR^n$. Scriveremo $\avec_k$ per riferirci alla $k$-esima colonna di una matrice $A$ e $a_k$ per riferirci al $k$-esimo elemento di un vettore $\avec$.
 
 \subsection{L'indice di centralità di Katz e modellazione del problema}
 
@@ -182,7 +182,7 @@ alla matrice identità e $\evec_k \in \RR^n$ per riferirci alla $k$-esima colonn
 \end{definition}
     
 L'obiettivo di \cite{katz2024} è quello di sviluppare degli algoritmi efficienti per aggiornare il vettore di Katz $\xvec$ senza dover nuovamente
-risolvere il sistema lineare $(I-\alpha A)\xvec = \bone$. Per fare ciò
+risolvere un sistema lineare della forma $(I-\alpha \hat A)\hat\xvec = \bone$. Per fare ciò
 si sono considerati due casi: quello in cui viene rimosso un arco e quello
 in cui viene rimosso un nodo. Nel primo caso, per rimuovere l'arco $(i, j)$
 si procede annullando le entrate $A_{ij}$ e $A_{ji}$ nella matrice di
@@ -214,8 +214,8 @@ dall'Osservazione~\ref{remark:molt_per_1}.
 
 Uno dei principali obiettivi di \cite{katz2024} è quello di trovare
 una scrittura alternativa a \eqref{eq:scrittura_csr} per ricavare
-$A_\cS^r$ e aggiornare così l'indice di Katz. Infatti, se $\xvec^\cS$ è
-l'indice di Katz ottenuto rimuovendo gli elementi di $\cS$, allora\footnote{Dal momento che $0 \leq A_\cS \leq A$, $\rho (A_\cS) \leq \rho(A)$ \cite{horn1985} e quindi la convergenza di $\sum_{r=0}^\infty \alpha^r A^r$ implica
+$A_\cS^r \bone$ e aggiornare così l'indice di Katz. Infatti, se $\xvec^\cS$ è
+l'indice di Katz ottenuto rimuovendo gli elementi di $\cS$, allora\footnote{Dal momento che $0 \leq A_\cS \leq A$, $\rho (A_\cS) \leq \rho(A)$ (cfr.~\cite{horn1985}) e quindi la convergenza di $\sum_{r=0}^\infty \alpha^r A^r$ implica
 	quella di $\sum_{r=0}^\infty \alpha^r A_\cS^r$. Pertanto le scritture di \eqref{eq:scrittura_del_cambio_di_centralità} sono ben definite.}
 
 \begin{equation} \label{eq:scrittura_del_cambio_di_centralità}
@@ -265,7 +265,7 @@ all'equazione
 dove si ricorda che $A_\cE$ rappresenta la matrice di adiacenza ottenuta
 eliminando dal grafo $G$ gli archi di $\cE$.
 
-Tramite la definizione di $A_\cE$ e un cambio dell'ordine delle sommatorie si può a sua volta riscrivere l'eq. \eqref{eq:riscrittura_più_archi} come
+Tramite la definizione di $A_\cE$ e un cambio dell'ordine delle sommatorie si può a sua volta riscrivere l'eq.~\eqref{eq:riscrittura_più_archi} come
 
 \begin{equation} \label{eq:finale_più_archi}
 	\cvec_r^\cE = \sum_{k=0}^{r-1} (A_\cE)^k A^{r-k} \bone - \sum_{k=0}^{r-1} (A_\cE)^{k+1} A^{r-k-1} \bone.
@@ -275,7 +275,7 @@ Tramite la definizione di $A_\cE$ e un cambio dell'ordine delle sommatorie si pu
 
 Abbiamo modellato l'eliminazione di un nodo $w$ come una modifica della matrice di
 adiacenza in cui annulliamo ogni entrata relativa a $w$. Possiamo dunque
-utilizzare l'equazione \eqref{eq:riscrittura_più_archi} con $\cE = \{ \{w, u\} \in E\}$ e $A_\cN = A_\cE$ per ricavare
+utilizzare l'equazione \eqref{eq:riscrittura_più_archi} con $\cE = \{ \{w, u\} \in E \mid u \in V\}$ e $A_\cN = A_\cE$ per ricavare
 \begin{eqnarray}
 	\cvec_r^{\{w\}} = \cvec_r^\cE 
 	&=& \sum_{k=0}^{r-1} \left( (A_\cE)^k (\evec_w \avec_w^T + \avec_w \evec_w^T) A^{r-k-1} \right) \bone \nonumber \\
@@ -319,7 +319,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	di Katz è sufficiente dunque trovare una riscrittura di $\qvec_k$.
 	
 	Tuttavia non esiste un analogo di \eqref{eq:riscrittura_più_archi} per
-	l'eliminazione di più nodi (cfr. \cite[p.~8]{katz2024}), e si rende
+	l'eliminazione di più nodi (cfr.~\cite[p.~8]{katz2024}), e si rende
 	necessaria l'introduzione di una generalizzazione del concetto di
 	FPW per ovviare al problema.
 	
@@ -383,15 +383,15 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	
 	La dimostrazione della Proposizione \ref{prop:qveccf} si basa sulla
 	riscrittura di $\qvec_{k+1}^\cF$ come $A_\cN \qvec_k^\cF$ e di
-	$A_\cN$ come $A - \sum_{j \in \cN} [\evec_j, \avec_j][\avec_j, \evec_j]^T$ (cfr. Osservazione \ref{remark:ops}, \cite[Proposition 5]{katz2024}).
+	$A_\cN$ come $A - \sum_{j \in \cN} [\evec_j, \avec_j][\avec_j, \evec_j]^T$ (cfr.~Osservazione \ref{remark:ops}, \cite[Proposition 5]{katz2024}).
 	
 	\subsection{Algoritmi per l'aggiornamento dell'indice di Katz}
 	
 	Grazie alla riscrittura della variazione dell'indice di Katz
-	data dell'eq. \eqref{eq:scrittura_del_cambio_di_centralità}, possiamo
+	data dell'eq.~\eqref{eq:scrittura_del_cambio_di_centralità}, possiamo
 	adesso ricavare efficientemente nei vari casi il nuovo indice di Katz.
 	
-	Nel caso in cui si tolga degli archi, mettendo insieme l'eq. \eqref{eq:scrittura_del_cambio_di_centralità} e l'eq. \eqref{eq:finale_più_archi}, si ottiene il seguente risultato.
+	Nel caso della rimozione di archi, mettendo insieme l'eq.~\eqref{eq:scrittura_del_cambio_di_centralità} e l'eq.~\eqref{eq:finale_più_archi}, si ottiene il seguente risultato.
 	
 	\begin{corollary}
 		L'indice di Katz dopo la rimozione di un insieme
@@ -411,11 +411,11 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	\end{corollary}
 	
 	Per costruire l'Algoritmo \ref{alg:arco}, che aggiorna l'indice di Katz dopo la rimozione
-	di un arco, si è imposto innanzitutto per le due serie nell'eq. \eqref{eq:rimozione_arco_finale} un limite superiore $L \in \NN$. Questo limite è scelto dinamicamente dall'algoritmo
+	di un arco, si è imposto un limite superiore $L \in \NN$ per le due serie dell'eq.~\eqref{eq:rimozione_arco_finale}. Questo limite è scelto dinamicamente dall'algoritmo
 	in modo tale che sia al più un limite statico $L_{max}^\cE \in \NN$ e che sia il minimo per cui la norma della differenza tra la serie per $L+1$
-	e quella per $L$ sia minore di una tolleranza $\texttt{tol}$.
+	e quella per $L$ sia minore di una tolleranza $\texttt{tol}$ prestabilita.
 	
-	Questo corrisponde a controllare che valga
+	Questo corrisponde a controllare ad ogni iterazione se valga o meno
 	\[
 		\alpha^{L+1}\left( x_u
 		\frac{\|A_\cE^L \evec_v\|_2}{\|\xvec\|_2} +
@@ -423,7 +423,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 		\right) < \texttt{tol}.
 	\]
 	
-	Finché questa condizione non vale e si è sotto il numero massimo di iterazioni, si reitera ogni somma dell'eq. \eqref{eq:rimozione_arco_finale}.
+	Finché questa condizione non vale e si è sotto il numero massimo di iterazioni, si reitera ogni somma dell'eq.~\eqref{eq:rimozione_arco_finale}.
 	
 	\begin{algorithm}[H]
 		\caption{Aggiornamento dell'indice di Katz dopo la rimozione di un arco}
@@ -449,7 +449,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	\end{algorithm}
 	
 	Per rimuovere un nodo il percorso è del tutto analogo. Mettendo insieme
-	l'eq. \eqref{eq:scrittura_del_cambio_di_centralità} e la Proposizione \ref{prop:qkfi}, si ottiene il seguente corollario.
+	l'eq.~\eqref{eq:scrittura_del_cambio_di_centralità} e la Proposizione \ref{prop:qkfi}, si ottiene il seguente corollario.
 	
 	\begin{corollary}
 		L'indice di Katz dopo la rimozione di un insieme di nodi $\cN \subseteq V$ in $G$ è tale per cui
@@ -471,7 +471,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	
 	Ancora una volta, per costruire l'Algoritmo \ref{alg:nodo}, si è troncato
 	le serie a un limite $L \in \NN$, scelto nello stesso modo proposto
-	per l'Algoritmo \ref{alg:arco}. Questa volta la condizione da soddisfare
+	per l'Algoritmo \ref{alg:arco}. Questa volta la condizione da controllare
 	è però
 	\[
 		\alpha^L x_w \frac{\|\qvec_L\|_2}{\|\xvec\|_2} < \texttt{tol}.
@@ -501,19 +501,22 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	\end{algorithm}
 	
 	Ricordando che il costo computazionale di un prodotto matrice-vettore $Av$ con $v \in \RR^n$ è $\mathcal{O}(m)$, dove $m$ è il numero di archi di $G$,
-	si ricava facilmente che l'Algoritmo \ref{alg:arco} e l'Algoritmo \ref{alg:nodo} hanno entrambi complessità computazionale $\mathcal{O}(Lm)$ (cfr. \cite[Proposition 8]{katz2024}).
+	si ricava facilmente che l'Algoritmo \ref{alg:arco} e l'Algoritmo \ref{alg:nodo} hanno entrambi complessità computazionale $\mathcal{O}(Lm)$ (cfr.~\cite[Proposition 8]{katz2024}).
 	
 	\section{Implementazione e sperimentazione in MATLAB}
 	
-	Presso \cite{hearotCode} si sono implementati in \texttt{katz\_edge.m} e \texttt{katz\_node.m}, rispettivamente, gli Algoritmi
-	\ref{alg:arco} e \ref{alg:nodo}. La sperimentazione è stata portata a termine tramite MATLAB R2024b su un PC fisso equipaggiato di 32 GB di RAM e di
-	una CPU Intel i7-10700K con un clock rate di 3.80 GHz.
+	Gli Algoritmi \ref{alg:arco} e \ref{alg:nodo} sono stati rispettivamente implementati
+	nei file \texttt{katz\_edge.m} e \texttt{katz\_node.m}, riportati in \cite{hearotCode}.
+	Le simulazioni sono state eseguite in ambiente MATLAB R2024b su un PC desktop equipaggiato con 32 GB di RAM e
+	processore Intel i7-10700K con un clock rate di 3.80 GHz.
 	
 	\subsection{Illustrazione degli esperimenti}
 	
 	La sperimentazione segue quella di \cite[Section 7]{katz2024}, e procede considerando il grafo dei collegamenti stradali dello
 	stato del Minnesota (\texttt{minnesota}), disponibile su \cite{minnesota} e a cui ci si riferirà d'ora in poi con $A$. Nella Tabella \ref{tab:info_minnesota} sono riassunte
-	le informazioni di base del grafo in questione. Si osserva subito che \texttt{minnesota} è un grafo \textit{sparso}.
+	le informazioni di base del grafo in questione.
+	
+	Si osserva subito che \texttt{minnesota} è un grafo \textit{sparso}.
 	
 	\begin{table}[H]
 		\centering
@@ -535,7 +538,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	
 	Nella prima fase si è considerato l'arco $e = \{1011, 1015\}$ e si è costruita la
 	matrice di adiacenza $A_\cE$ del grafo ottenuto eliminando l'arco $e$. Si è dunque calcolato il nuovo vettore di Katz
-	usando i tre seguenti metodi:
+	usando i seguenti tre metodi:
 	
 	\begin{enumerate}
 		\item[(i)] Algoritmo \ref{alg:arco} con $L_{\max}^{\cE} = 30$ e $\texttt{tol} = 10^{-4}$.
@@ -552,7 +555,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 		\frac{\|\hat\xvec - \xvec^\cE\|}{\|\xvec^\cE\|} \approx 1.56 \cdot 10^{-4}.
 	\]
 	
-	Nella Tabella \ref{tab:esperimento_1} sono riportati i dati riguardanti il primo esperimento.
+	La Tabella \ref{tab:esperimento_1} riporta i tempi di esecuzione e il numero di iterazioni relativi al primo esperimento.
 	
 	\begin{table}[H]
 		\centering
@@ -572,7 +575,7 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	\end{table}
 	
 	Nella seconda fase si è considerato analogamente il nodo $w = 1011$, poi rimosso. Si è costruita la matrice di adiacenza
-	$A_\cN$ e si è poi calcolato il nuovo vettore di Katz usando i tre seguenti metodi:
+	$A_\cN$ e si è poi calcolato il nuovo vettore di Katz usando i seguenti tre metodi:
 	
 	\begin{enumerate}
 		\item[(i)] Algoritmo \ref{alg:nodo} con $L_{\max}^{\cE} = 30$ e $\texttt{tol} = 10^{-4}$.
@@ -621,10 +624,10 @@ dove si è usato che $\sum_{v \in V} A_{vw} \evec_v = \avec_w$, che $\evec_w^T A
 	Si può spiegare questa incoerenza in tre modi:
 	
 	\begin{itemize}
-		\item[(i)] L'implementazione di \texttt{katz\_edge.m} e di \texttt{katz\_node.m} è fatta in MATLAB, mentre
-		      \texttt{pcg} è una funzione built-in di MATLAB, risultando dunque sicuramente più ottimizzata.
+		\item[(i)] \texttt{pcg} è una funzione built-in di MATLAB, mentre \texttt{katz\_edge} (Algoritmo \ref{alg:arco}) e
+		\texttt{katz\_node} (Algoritmo \ref{alg:nodo}) non lo sono. Pertanto è naturale che \texttt{pcg} sia più ottimizzata.
 		      
-		\item[(ii)] La matrice di adiacenza di \texttt{minnesota} è molto sparsa nonché non eccessivamente grande (cfr. Tabella \ref{tab:info_minnesota}),
+		\item[(ii)] La matrice di adiacenza di \texttt{minnesota} è molto sparsa nonché non eccessivamente grande (cfr.~Tabella \ref{tab:info_minnesota}),
 		      e \texttt{pcg} è già fortemente ottimizzato per le matrici sparse.
 		      
 		\item[(iii)] Togliere un singolo arco o un singolo nodo potrebbe non far variare molto il ranking dato dal vettore
